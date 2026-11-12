@@ -29,10 +29,12 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 .hide{display:none}
 #pad{display:flex;justify-content:space-between;margin-top:10px;gap:10px}
 #pad div{display:flex;gap:10px}
-#pad button{min-width:74px;height:56px;font-size:24px;background:var(--card);color:var(--ink);border:2px solid var(--line);user-select:none;touch-action:none}
+#pad button{min-width:92px;height:72px;font-size:30px;background:var(--card);color:var(--ink);border:2px solid var(--line);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}#pad button:active{background:var(--ok);color:#fff}#pad #bj{min-width:150px;font-size:22px}#pad div{gap:14px}
+html,body{touch-action:manipulation;overscroll-behavior:none}
+#mute{padding:4px 10px;background:var(--card);color:var(--ink);border:2px solid var(--line);font-size:16px}
 </style></head><body>
 <div id="wrap">
-<div id="hud"><span id="num">CO₂ 1000 kg</span><div id="bar"><div id="fill"></div><div id="goal"></div></div><span>เป้าหมาย ≤ 500</span></div>
+<div id="hud"><span id="num">CO₂ 1000 kg</span><div id="bar"><div id="fill"></div><div id="goal"></div></div><span>เป้าหมาย ≤ 500</span><button id="mute" aria-label="เปิด/ปิดเสียง">🔊</button></div>
 <div id="stage"><canvas id="c" width="800" height="400"></canvas><div id="toast"></div>
 <div class="ov" id="start"><h1>Carbon Runner: เมืองหมอกควัน</h1>
 <p>น้องนักเรียนเทพศิรินทร์ในเสื้อลายเหลือง-เขียว จะมาช่วยเมืองที่ปล่อยคาร์บอนสูงมาก! วิ่งไปทางขวาจนถึงธง แล้วทำให้ค่าคาร์บอนเหลือไม่เกิน 500 kg</p>
@@ -57,6 +59,12 @@ const ITEMS=[
 {e:'🌳',n:'ต้นไม้',d:-50,t:'ช่วยดูดซับ CO₂ จากอากาศ'},
 {e:'♻️',n:'โรงรีไซเคิล',d:-60,t:'ลดขยะและพลังงานผลิตวัสดุใหม่'}];
 let carbon,cd,p,blocks,bottles,items,cam,state,toastT,keys={left:0,right:0,jump:0},flagMsg;
+let AC,muted=false,started=false,mi=0;
+function ac(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}}if(AC&&AC.state=='suspended')AC.resume();return AC;}
+function tone(f,d,type,vol,slide,delay){if(muted||!started)return;const a=ac();if(!a)return;const t=a.currentTime+(delay||0),o=a.createOscillator(),g=a.createGain();o.type=type||'square';o.frequency.setValueAtTime(f,t);if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(30,slide),t+d);g.gain.setValueAtTime(vol||.08,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+.02);}
+const SFX={jump:()=>tone(300,.18,'square',.06,720),stomp:()=>{tone(220,.12,'square',.09,80);tone(660,.1,'triangle',.06,990,.05);},bump:()=>tone(150,.1,'square',.09,90),good:()=>[523,659,784,1047].forEach((f,i)=>tone(f,.14,'triangle',.08,0,i*.07)),bad:()=>tone(180,.35,'sawtooth',.07,60),hurt:()=>tone(400,.25,'sawtooth',.08,90),win:()=>[523,659,784,659,784,1047].forEach((f,i)=>tone(f,.18,'square',.07,0,i*.13)),lose:()=>[392,330,262,196].forEach((f,i)=>tone(f,.25,'triangle',.09,0,i*.2))};
+const MEL=[523,0,659,0,784,659,523,0,587,0,698,0,880,698,587,0];
+setInterval(()=>{if(state=='play'){const n=MEL[mi++%MEL.length];if(n)tone(n,.2,'triangle',.035);}},230);
 function reset(){
 carbon=1000;cd=1000;cam=0;items=[];toastT=0;flagMsg=0;
 p={x:60,y:GY-40,w:26,h:40,vx:0,vy:0,on:true,f:1,inv:0};
@@ -66,10 +74,10 @@ state='play';}
 function toast(h){const t=$('toast');t.innerHTML=h;t.classList.add('on');toastT=170;}
 function add(d){carbon=Math.max(0,carbon+d);}
 const hit=(a,b,bw,bh)=>a.x<b.x+bw&&a.x+a.w>b.x&&a.y<b.y+bh&&a.y+a.h>b.y;
-function bump(b){if(b.used)return;b.used=true;const it=ITEMS[Math.floor(Math.random()*ITEMS.length)];items.push({x:b.x+B/2,y:b.y-34,it,life:900,ph:Math.random()*6});}
+function bump(b){if(b.used)return;b.used=true;SFX.bump();const it=ITEMS[Math.floor(Math.random()*ITEMS.length)];items.push({x:b.x+B/2,y:b.y-34,it,life:900,ph:Math.random()*6});}
 function update(){
 const ax=keys.right-keys.left;p.vx=ax*3.6;if(ax)p.f=ax;
-if(keys.jump&&p.on){p.vy=-12.5;p.on=false;}
+if(keys.jump&&p.on){p.vy=-12.5;p.on=false;SFX.jump();}
 p.vy+=.62;p.x+=p.vx;p.x=Math.max(0,Math.min(L-100,p.x));
 for(const b of blocks)if(hit(p,b,B,B)){if(p.vx>0)p.x=b.x-p.w;else if(p.vx<0)p.x=b.x+B;}
 p.y+=p.vy;p.on=false;
@@ -78,9 +86,9 @@ if(p.y+p.h>=GY){p.y=GY-p.h;p.vy=0;p.on=true;}
 if(p.inv>0)p.inv--;
 for(const o of bottles){if(!o.alive)continue;o.x+=o.vx;if(Math.abs(o.x-o.x0)>90)o.vx*=-1;
 if(hit(p,o,o.w,o.h)){
-if(p.vy>0&&p.y+p.h-o.y<24){o.alive=false;p.vy=-8;add(-40);toast('🧴 กำจัดขวดพลาสติก <b class="g">−40 kg</b>');}
-else if(!p.inv){add(40);p.inv=90;p.vy=-6;p.x-=p.f*30;toast('โดนขวดพลาสติกชน <b class="b">+40 kg</b>');}}}
-for(const it of items){it.life--;if(Math.hypot(p.x+p.w/2-it.x,p.y+p.h/2-it.y)<30){it.life=0;add(it.it.d);
+if(p.vy>0&&p.y+p.h-o.y<24){o.alive=false;p.vy=-8;add(-40);SFX.stomp();toast('🧴 กำจัดขวดพลาสติก <b class="g">−40 kg</b>');}
+else if(!p.inv){add(40);p.inv=90;SFX.hurt();if(navigator.vibrate)navigator.vibrate(80);p.vy=-6;p.x-=p.f*30;toast('โดนขวดพลาสติกชน <b class="b">+40 kg</b>');}}}
+for(const it of items){it.life--;if(Math.hypot(p.x+p.w/2-it.x,p.y+p.h/2-it.y)<30){it.life=0;add(it.it.d);it.it.d<0?SFX.good():SFX.bad();
 toast(it.it.e+' '+it.it.n+' <b class="'+(it.it.d<0?'g':'b')+'">'+(it.it.d>0?'+':'−')+Math.abs(it.it.d)+' kg</b><br><small>'+it.it.t+'</small>');}}
 items=items.filter(i=>i.life>0);
 if(p.x>=L-100){if(carbon<=GOAL)return end(true);if(!flagMsg){toast('ค่าคาร์บอนยังสูงเกิน '+GOAL+' kg กลับไปกำจัดขวดและเก็บพลังงานสะอาดเพิ่ม');flagMsg=200;}p.x=L-101;}
@@ -88,7 +96,7 @@ if(flagMsg>0)flagMsg--;
 if(carbon>=1500)end(false);
 cam=Math.max(0,Math.min(L-W,p.x-300));
 if(toastT>0&&--toastT==0)$('toast').classList.remove('on');}
-function end(w){state=w?'win':'lose';$('end').classList.remove('hide');
+function end(w){state=w?'win':'lose';w?SFX.win():SFX.lose();$('end').classList.remove('hide');
 $('et').textContent=w?'เมืองกลับมาสดใสแล้ว!':'เมืองจมในหมอกควัน';
 $('ep').textContent=w?'คาร์บอนเหลือ '+Math.round(carbon)+' kg ขวดพลาสติกที่กำจัดได้: '+bottles.filter(b=>!b.alive).length+' ตัว':'คาร์บอนพุ่งถึง 1500 kg ลองใหม่ และเลือกเก็บเฉพาะพลังงานสะอาด';}
 const mix=(a,b,t)=>'rgb('+a.map((v,i)=>Math.round(v+(b[i]-v)*t)).join(',')+')';
@@ -154,7 +162,10 @@ addEventListener('keyup',e=>{const k=K[e.key];if(k)keys[k]=0;});
 [['bl','left'],['br','right'],['bj','jump']].forEach(([id,k])=>{const b=$(id);
 b.addEventListener('pointerdown',e=>{e.preventDefault();keys[k]=1;});
 ['pointerup','pointerleave','pointercancel'].forEach(ev=>b.addEventListener(ev,()=>keys[k]=0));});
-$('go').onclick=()=>{$('start').classList.add('hide');};
+$('go').onclick=()=>{$('start').classList.add('hide');started=true;ac();};
+$('mute').onclick=()=>{muted=!muted;$('mute').textContent=muted?'🔇':'🔊';};
+$('pad').addEventListener('contextmenu',e=>e.preventDefault());
+addEventListener('blur',()=>{keys.left=keys.right=keys.jump=0;});
 $('again').onclick=()=>{$('end').classList.add('hide');reset();};
 reset();loop();
 </script></body></html>
