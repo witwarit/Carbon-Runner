@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="th"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Carbon Runner – เมืองหมอกควัน</title>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#e9eee6;--ink:#1d2a22;--card:#fff;--ok:#2f7d4f;--bad:#b5532c;--line:#c9d3c6;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14181a;--ink:#e6ece7;--card:#1f2629;--ok:#5fbf86;--bad:#e8895c;--line:#35403a}}
+:root[data-theme="dark"]{--bg:#14181a;--ink:#e6ece7;--card:#1f2629;--ok:#5fbf86;--bad:#e8895c;--line:#35403a}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:'Kanit',system-ui,sans-serif}
+body{display:flex;flex-direction:column;align-items:center;padding:10px}
+#wrap{width:100%;max-width:820px;position:relative}
+#hud{display:flex;align-items:center;gap:12px;margin-bottom:8px;font-size:15px}
+#num{font-weight:600;min-width:150px}
+#bar{flex:1;height:14px;background:var(--line);border-radius:7px;position:relative;overflow:hidden}
+#fill{height:100%;width:50%;background:var(--bad);transition:background .3s}
+#goal{position:absolute;top:0;bottom:0;width:2px;background:var(--ink)}
+#stage{position:relative}
+canvas{width:100%;height:auto;aspect-ratio:2/1;display:block;border-radius:10px;border:2px solid var(--line);background:#999;touch-action:none}
+#toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:var(--card);color:var(--ink);border:2px solid var(--line);border-radius:10px;padding:8px 14px;font-size:14px;max-width:92%;text-align:center;opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.on{opacity:1}
+#toast b.g{color:var(--ok)}#toast b.b{color:var(--bad)}
+.ov{position:absolute;inset:0;background:rgba(10,14,12,.78);color:#f2f5f2;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:18px;border-radius:10px;gap:8px}
+.ov h1{margin:0;font-size:clamp(22px,5vw,34px)}
+.ov p{margin:0;max-width:520px;font-size:clamp(13px,2.6vw,16px);line-height:1.55}
+button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:10px 22px;background:var(--ok);color:#fff;cursor:pointer}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.hide{display:none}
+#pad{display:flex;justify-content:space-between;margin-top:10px;gap:10px}
+#pad div{display:flex;gap:10px}
+#pad button{min-width:74px;height:56px;font-size:24px;background:var(--card);color:var(--ink);border:2px solid var(--line);user-select:none;touch-action:none}
+</style></head><body>
+<div id="wrap">
+<div id="hud"><span id="num">CO₂ 1000 kg</span><div id="bar"><div id="fill"></div><div id="goal"></div></div><span>เป้าหมาย ≤ 500</span></div>
+<div id="stage"><canvas id="c" width="800" height="400"></canvas><div id="toast"></div>
+<div class="ov" id="start"><h1>Carbon Runner: เมืองหมอกควัน</h1>
+<p>น้องนักเรียนเทพศิรินทร์ในเสื้อลายเหลือง-เขียว จะมาช่วยเมืองที่ปล่อยคาร์บอนสูงมาก! วิ่งไปทางขวาจนถึงธง แล้วทำให้ค่าคาร์บอนเหลือไม่เกิน 500 kg</p>
+<p>กระโดดเหยียบขวดพลาสติก: ลด 40 kg (ถ้าโดนชน: เพิ่ม 40 kg)<br>กระโดดชนกล่อง ? จะได้สิ่งก่อสร้างแบบสุ่ม ลองเก็บเฉพาะแบบที่ลดคาร์บอน ไอเทมจะลอยอยู่ 15 วินาที ถ้าไม่เก็บจะหายไป</p>
+<p>เล่นด้วยปุ่ม ← → และ Space หรือปุ่มบนจอ</p>
+<button id="go">เริ่มเกม</button></div>
+<div class="ov hide" id="end"><h1 id="et"></h1><p id="ep"></p><button id="again">เล่นอีกครั้ง</button></div></div>
+<div id="pad"><div><button id="bl" aria-label="ซ้าย">◀</button><button id="br" aria-label="ขวา">▶</button></div><button id="bj" aria-label="กระโดด">กระโดด</button></div>
+</div>
+<script>
+const cv=document.getElementById('c'),x=cv.getContext('2d');
+const W=800,H=400,GY=340,L=3600,B=36,GOAL=500;
+const $=id=>document.getElementById(id);
+const ITEMS=[
+{e:'🏭',n:'โรงไฟฟ้าถ่านหิน',d:120,t:'เผาถ่านหิน ปล่อย CO₂ สูงที่สุด'},
+{e:'🛢️',n:'โรงไฟฟ้าน้ำมัน',d:90,t:'ใช้เชื้อเพลิงฟอสซิล ปล่อย CO₂ สูง'},
+{e:'⛽',n:'โรงไฟฟ้าก๊าซ',d:70,t:'สะอาดกว่าถ่านหิน แต่ยังปล่อย CO₂'},
+{e:'🔥',n:'เตาเผาขยะ',d:60,t:'เผาขยะพลาสติก ปล่อยก๊าซเรือนกระจก'},
+{e:'☀️',n:'โซลาร์เซลล์',d:-90,t:'ผลิตไฟจากแสงแดด แทบไม่ปล่อย CO₂'},
+{e:'🌬️',n:'กังหันลม',d:-110,t:'ผลิตไฟจากลม ไม่ปล่อย CO₂ ตอนผลิต'},
+{e:'💧',n:'โรงไฟฟ้าพลังน้ำ',d:-80,t:'ใช้พลังน้ำ ปล่อย CO₂ ต่ำ'},
+{e:'🌳',n:'ต้นไม้',d:-50,t:'ช่วยดูดซับ CO₂ จากอากาศ'},
+{e:'♻️',n:'โรงรีไซเคิล',d:-60,t:'ลดขยะและพลังงานผลิตวัสดุใหม่'}];
+let carbon,cd,p,blocks,bottles,items,cam,state,toastT,keys={left:0,right:0,jump:0},flagMsg;
+function reset(){
+carbon=1000;cd=1000;cam=0;items=[];toastT=0;flagMsg=0;
+p={x:60,y:GY-40,w:26,h:40,vx:0,vy:0,on:true,f:1,inv:0};
+blocks=[];for(let i=0;i<14;i++)blocks.push({x:380+i*230,y:i%3==1?228:244,used:false});
+bottles=[];for(let i=0;i<14;i++)bottles.push({x:520+i*215,x0:520+i*215,y:GY-38,w:22,h:38,vx:(i%2?.9:-.9),alive:true});
+state='play';}
+function toast(h){const t=$('toast');t.innerHTML=h;t.classList.add('on');toastT=170;}
+function add(d){carbon=Math.max(0,carbon+d);}
+const hit=(a,b,bw,bh)=>a.x<b.x+bw&&a.x+a.w>b.x&&a.y<b.y+bh&&a.y+a.h>b.y;
+function bump(b){if(b.used)return;b.used=true;const it=ITEMS[Math.floor(Math.random()*ITEMS.length)];items.push({x:b.x+B/2,y:b.y-34,it,life:900,ph:Math.random()*6});}
+function update(){
+const ax=keys.right-keys.left;p.vx=ax*3.6;if(ax)p.f=ax;
+if(keys.jump&&p.on){p.vy=-12.5;p.on=false;}
+p.vy+=.62;p.x+=p.vx;p.x=Math.max(0,Math.min(L-100,p.x));
+for(const b of blocks)if(hit(p,b,B,B)){if(p.vx>0)p.x=b.x-p.w;else if(p.vx<0)p.x=b.x+B;}
+p.y+=p.vy;p.on=false;
+for(const b of blocks)if(hit(p,b,B,B)){if(p.vy>0){p.y=b.y-p.h;p.vy=0;p.on=true;}else if(p.vy<0){p.y=b.y+B;p.vy=0;bump(b);}}
+if(p.y+p.h>=GY){p.y=GY-p.h;p.vy=0;p.on=true;}
+if(p.inv>0)p.inv--;
+for(const o of bottles){if(!o.alive)continue;o.x+=o.vx;if(Math.abs(o.x-o.x0)>90)o.vx*=-1;
+if(hit(p,o,o.w,o.h)){
+if(p.vy>0&&p.y+p.h-o.y<24){o.alive=false;p.vy=-8;add(-40);toast('🧴 กำจัดขวดพลาสติก <b class="g">−40 kg</b>');}
+else if(!p.inv){add(40);p.inv=90;p.vy=-6;p.x-=p.f*30;toast('โดนขวดพลาสติกชน <b class="b">+40 kg</b>');}}}
+for(const it of items){it.life--;if(Math.hypot(p.x+p.w/2-it.x,p.y+p.h/2-it.y)<30){it.life=0;add(it.it.d);
+toast(it.it.e+' '+it.it.n+' <b class="'+(it.it.d<0?'g':'b')+'">'+(it.it.d>0?'+':'−')+Math.abs(it.it.d)+' kg</b><br><small>'+it.it.t+'</small>');}}
+items=items.filter(i=>i.life>0);
+if(p.x>=L-100){if(carbon<=GOAL)return end(true);if(!flagMsg){toast('ค่าคาร์บอนยังสูงเกิน '+GOAL+' kg กลับไปกำจัดขวดและเก็บพลังงานสะอาดเพิ่ม');flagMsg=200;}p.x=L-101;}
+if(flagMsg>0)flagMsg--;
+if(carbon>=1500)end(false);
+cam=Math.max(0,Math.min(L-W,p.x-300));
+if(toastT>0&&--toastT==0)$('toast').classList.remove('on');}
+function end(w){state=w?'win':'lose';$('end').classList.remove('hide');
+$('et').textContent=w?'เมืองกลับมาสดใสแล้ว!':'เมืองจมในหมอกควัน';
+$('ep').textContent=w?'คาร์บอนเหลือ '+Math.round(carbon)+' kg ขวดพลาสติกที่กำจัดได้: '+bottles.filter(b=>!b.alive).length+' ตัว':'คาร์บอนพุ่งถึง 1500 kg ลองใหม่ และเลือกเก็บเฉพาะพลังงานสะอาด';}
+const mix=(a,b,t)=>'rgb('+a.map((v,i)=>Math.round(v+(b[i]-v)*t)).join(',')+')';
+function drawSchool(s){
+const c=a=>mix(a,[100,90,78],s*.8),off=(cam*.5)%900,wh=[255,248,244],rd=[232,78,90],dr=[214,60,74];
+for(let k=0;k<2;k++){const o=k*900-off;
+x.fillStyle=c([176,74,66]);x.beginPath();x.moveTo(o-12,GY-118);x.lineTo(o+18,GY-160);x.lineTo(o+502,GY-160);x.lineTo(o+532,GY-118);x.fill();
+x.fillStyle=c(rd);x.beginPath();x.roundRect(o,GY-120,520,120,[6,6,0,0]);x.fill();
+x.fillStyle=c(wh);x.fillRect(o,GY-124,520,6);
+for(let j=0;j<10;j++){const wx=o+20+j*50;x.fillStyle=c(wh);x.beginPath();x.roundRect(wx,GY-102,28,80,[14,14,0,0]);x.fill();x.fillStyle=c([190,120,76]);x.beginPath();x.roundRect(wx+4,GY-98,20,76,[10,10,0,0]);x.fill();}
+x.fillStyle=c(dr);x.beginPath();x.moveTo(o+222,GY-120);x.lineTo(o+260,GY-196);x.lineTo(o+298,GY-120);x.fill();x.strokeStyle=c(wh);x.lineWidth=3;x.stroke();
+x.fillStyle=c(wh);x.beginPath();x.arc(o+260,GY-150,9,0,7);x.fill();x.fillStyle=c(rd);x.beginPath();x.arc(o+260,GY-150,4,0,7);x.fill();
+[o+218,o+302].forEach(sx=>{x.fillStyle=c(dr);x.beginPath();x.moveTo(sx-6,GY-122);x.lineTo(sx,GY-146);x.lineTo(sx+6,GY-122);x.fill();});
+x.fillStyle=c(wh);x.fillRect(o+258,GY-210,4,16);x.beginPath();x.roundRect(o+200,GY-236,120,26,13);x.fill();x.fillStyle=c([190,50,60]);x.font='600 14px Kanit,sans-serif';x.textAlign='center';x.fillText('เทพศิรินทร์',o+260,GY-218);
+const bx=o+590,h=150;
+x.fillStyle=c(wh);x.beginPath();x.roundRect(bx,GY-h,210,h,[8,8,0,0]);x.fill();
+x.fillStyle=c(rd);x.fillRect(bx-6,GY-h-10,222,12);x.fillRect(bx+75,GY-h-10,60,h+10);x.beginPath();x.moveTo(bx+75,GY-h-10);x.lineTo(bx+105,GY-h-52);x.lineTo(bx+135,GY-h-10);x.fill();
+x.fillStyle=c([255,201,74]);x.beginPath();x.arc(bx+105,GY-h+22,9,0,7);x.fill();
+for(let r=0;r<4;r++)for(let q=0;q<6;q++){if(q==2||q==3)continue;const wx=bx+12+q*33,wy=GY-h+18+r*32;x.fillStyle=c([120,170,214]);x.fillRect(wx,wy,18,12);x.fillStyle=c(rd);x.fillRect(wx-3,wy+14,24,4);}
+const px=o+556;x.fillStyle=c([150,120,100]);x.fillRect(px-3,GY-170,6,170);x.fillStyle=c([70,170,100]);
+[[-26,6,-.4],[26,6,.4],[-14,-6,-.9],[14,-6,.9],[0,-10,0]].forEach(([dx,dy,r])=>{x.beginPath();x.ellipse(px+dx,GY-172+dy,20,6,r,0,7);x.fill();});}}
+function drawKid(){const a=p.x,b=p.y,f=p.f,ex=f*2,st=p.on&&p.vx?Math.sin(Date.now()/70)*3:0;
+x.fillStyle='#fff';x.fillRect(a+4+st,b+35,7,5);x.fillRect(a+15-st,b+35,7,5);
+x.fillStyle='#2b3a67';x.beginPath();x.roundRect(a+3,b+30,20,7,3);x.fill();
+x.fillStyle='#f5a623';x.beginPath();x.roundRect(a+3,b+21,20,12,4);x.fill();
+x.fillStyle='#1f7a3e';x.fillRect(a+9,b+21,8,12);x.fillRect(a+4,b+23,2,9);x.fillRect(a+20,b+23,2,9);x.fillRect(a+8,b+21,10,3);
+x.fillStyle='#e8433b';x.beginPath();x.arc(a+(f>0?20:6),b+26,2,0,7);x.fill();
+x.fillStyle='#f5a623';x.beginPath();x.arc(a+2,b+27,3.5,0,7);x.fill();x.beginPath();x.arc(a+24,b+27,3.5,0,7);x.fill();
+x.fillStyle='#ffdcb8';x.beginPath();x.arc(a+13,b+10,12,0,7);x.fill();
+x.fillStyle='#2a2320';x.beginPath();x.arc(a+13,b+9,12.5,Math.PI,0);x.fill();x.fillRect(a+1,b+8,4,5);x.fillRect(a+21,b+8,4,5);
+x.fillStyle='#222';x.beginPath();x.arc(a+8+ex,b+12,2.3,0,7);x.fill();x.beginPath();x.arc(a+18+ex,b+12,2.3,0,7);x.fill();
+x.fillStyle='#fff';x.beginPath();x.arc(a+8.8+ex,b+11.2,.8,0,7);x.fill();x.beginPath();x.arc(a+18.8+ex,b+11.2,.8,0,7);x.fill();
+x.fillStyle='rgba(255,120,150,.6)';x.beginPath();x.arc(a+5,b+16,2.6,0,7);x.fill();x.beginPath();x.arc(a+21,b+16,2.6,0,7);x.fill();
+x.strokeStyle='#a55';x.lineWidth=1.2;x.beginPath();x.arc(a+13+ex,b+15.5,2.5,.2,2.9);x.stroke();}
+function draw(){
+const s=Math.max(0,Math.min(1,(cd-300)/1200));
+x.fillStyle=mix([160,220,250],[196,170,134],s);x.fillRect(0,0,W,H);
+for(let i=0;i<8;i++){const cx=((i*230-cam*.2)%1900+1900)%1900-150,cy=60+(i%3)*30;x.fillStyle='rgba(255,255,255,'+(.9-s*.4)+')';[[0,0,22],[26,-8,28],[54,2,20]].forEach(([u,v,r])=>{x.beginPath();x.arc(cx+u,cy+v,r,0,7);x.fill();});}
+drawSchool(s);
+
+x.fillStyle=mix([196,150,110],[90,80,70],s);x.fillRect(0,GY,W,H-GY);x.fillStyle=mix([120,205,120],[110,104,84],s);x.fillRect(0,GY,W,14);
+x.fillStyle='rgba(0,0,0,.18)';x.fillRect(0,GY,W,4);
+x.save();x.translate(-cam,0);
+for(const b of blocks){x.fillStyle=b.used?'#c9b08f':'#ffc94a';x.strokeStyle='#8a5a1c';x.lineWidth=3;x.beginPath();x.roundRect(b.x+1,b.y+1,B-2,B-2,10);x.fill();x.stroke();
+if(!b.used){x.fillStyle='#5b3d1c';x.font='600 24px Kanit,sans-serif';x.textAlign='center';x.fillText('?',b.x+B/2,b.y+27);}}
+for(const o of bottles){if(!o.alive)continue;x.fillStyle='#7cc8f2';x.beginPath();x.roundRect(o.x,o.y+10,o.w,o.h-10,8);x.fill();x.beginPath();x.roundRect(o.x+5,o.y+2,12,10,4);x.fill();x.fillStyle='#ff7a8a';x.fillRect(o.x+4,o.y,14,4);x.fillStyle='#234';x.beginPath();x.arc(o.x+7,o.y+22,2,0,7);x.fill();x.beginPath();x.arc(o.x+15,o.y+22,2,0,7);x.fill();x.fillStyle='rgba(255,110,140,.7)';x.beginPath();x.arc(o.x+4,o.y+27,2.5,0,7);x.fill();x.beginPath();x.arc(o.x+18,o.y+27,2.5,0,7);x.fill();
+}
+x.font='34px sans-serif';x.textAlign='center';
+for(const it of items){if(it.life<150&&it.life%10<5)continue;x.fillText(it.it.e,it.x,it.y+Math.sin(it.life/10+it.ph)*4+10);}
+x.fillStyle='#fff';x.fillRect(L-60,GY-150,5,150);x.fillStyle=carbon<=GOAL?'#2f9e5b':'#c24a2c';x.fillRect(L-55,GY-150,44,28);
+if(!(p.inv>0&&p.inv%8<4)){drawKid();
+
+}
+x.restore();
+x.fillStyle='rgba(120,90,50,'+(s*.28)+')';x.fillRect(0,0,W,H);}
+function hud(){cd+=(carbon-cd)*.12;$('num').textContent='CO₂ '+Math.round(cd)+' kg';
+const f=$('fill');f.style.width=Math.min(100,cd/1500*100)+'%';f.style.background=cd<=GOAL?'var(--ok)':'var(--bad)';}
+$('goal').style.left=(GOAL/1500*100)+'%';
+function loop(){if(state=='play')update();draw();hud();requestAnimationFrame(loop);}
+const K={ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',ArrowUp:'jump',w:'jump',' ':'jump'};
+addEventListener('keydown',e=>{const k=K[e.key];if(k){keys[k]=1;e.preventDefault();}});
+addEventListener('keyup',e=>{const k=K[e.key];if(k)keys[k]=0;});
+[['bl','left'],['br','right'],['bj','jump']].forEach(([id,k])=>{const b=$(id);
+b.addEventListener('pointerdown',e=>{e.preventDefault();keys[k]=1;});
+['pointerup','pointerleave','pointercancel'].forEach(ev=>b.addEventListener(ev,()=>keys[k]=0));});
+$('go').onclick=()=>{$('start').classList.add('hide');};
+$('again').onclick=()=>{$('end').classList.add('hide');reset();};
+reset();loop();
+</script></body></html>
