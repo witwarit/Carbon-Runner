@@ -70,11 +70,11 @@ function tone(f,d,type,vol,slide,delay){if(muted||!started)return;const a=ac();i
 const SFX={jump:()=>tone(300,.18,'square',.06,720),stomp:()=>{tone(220,.12,'square',.09,80);tone(660,.1,'triangle',.06,990,.05);},bump:()=>tone(150,.1,'square',.09,90),good:()=>[523,659,784,1047].forEach((f,i)=>tone(f,.14,'triangle',.08,0,i*.07)),bad:()=>tone(180,.35,'sawtooth',.07,60),hurt:()=>tone(400,.25,'sawtooth',.08,90),win:()=>[523,659,784,659,784,1047].forEach((f,i)=>tone(f,.18,'square',.07,0,i*.13)),lose:()=>[392,330,262,196].forEach((f,i)=>tone(f,.25,'triangle',.09,0,i*.2))};
 const MEL=[523,0,659,0,784,659,523,0,587,0,698,0,880,698,587,0];
 setInterval(()=>{if(state=='play'){const n=MEL[mi++%MEL.length];if(n)tone(n,.2,'triangle',.035);}},230);
-let spawnT=0,killed=0;
+let spawnT=0,killed=0,fT=0,allT=0;
 const MT=[{n:'ขวดพลาสติก',w:22,h:38,s:.9,v:40},{n:'ถุงพลาสติก',w:28,h:30,s:1.1,v:30,hop:1},{n:'ถุงขยะดำ',w:30,h:32,s:.6,v:50},{n:'แก้วพลาสติก',w:22,h:34,s:1,v:35},{n:'กล่องโฟม',w:34,h:22,s:1.5,v:45},{n:'ซองขนม',w:26,h:30,s:1.2,v:30,hop:1}];
 function mk(px,t){const m=MT[t];return{t,x:px,x0:px,y:GY-m.h,w:m.w,h:m.h,vx:(Math.random()<.5?-1:1)*m.s,alive:true,ph:Math.random()*6,hop:m.hop};}
 function reset(){
-carbon=1000;cd=1000;cam=0;items=[];killed=0;spawnT=0;toastT=0;flagMsg=0;
+carbon=1000;cd=1000;cam=0;items=[];killed=0;spawnT=0;fT=0;allT=0;toastT=0;flagMsg=0;
 p={x:60,y:GY-40,w:26,h:40,vx:0,vy:0,on:true,f:1,inv:0};
 blocks=[];for(let i=0;i<14;i++)blocks.push({x:380+i*230,y:i%3==1?228:244,used:false});
 bottles=[];for(let i=0;i<14;i++)bottles.push(mk(520+i*215,i<2?0:Math.floor(Math.random()*6)));
@@ -85,6 +85,7 @@ const hit=(a,b,bw,bh)=>a.x<b.x+bw&&a.x+a.w>b.x&&a.y<b.y+bh&&a.y+a.h>b.y;
 function bump(b){if(b.used)return;b.used=true;SFX.bump();const it=ITEMS[Math.floor(Math.random()*ITEMS.length)];items.push({x:b.x+B/2,y:b.y-34,it,life:900,ph:Math.random()*6});}
 function update(){
 spawnT++;if(spawnT>140){spawnT=0;bottles=bottles.filter(o=>o.alive);if(bottles.filter(o=>o.x>cam-100&&o.x<cam+W+500).length<4)bottles.push(mk(Math.min(L-140,cam+W+30+Math.random()*250),Math.floor(Math.random()*6)));}
+if(blocks.every(b=>b.used)){if(!allT){allT=1;toast('กล่องหมดแล้ว! ไอเทมจะลอยมาเป็นระยะ เลือกเก็บเฉพาะของดี');}fT++;if(fT>200&&items.length<4){fT=0;items.push({x:Math.min(L-60,cam+W+30),y:GY-60-Math.random()*70,it:ITEMS[Math.floor(Math.random()*ITEMS.length)],life:900,ph:Math.random()*6,vx:-1.1});}}
 const ax=keys.right-keys.left;p.vx=ax*3.6;if(ax)p.f=ax;
 if(keys.jump&&p.on){p.vy=-12.5;p.on=false;SFX.jump();}
 p.vy+=.62;p.x+=p.vx;p.x=Math.max(0,Math.min(L-100,p.x));
@@ -97,7 +98,7 @@ for(const o of bottles){if(!o.alive)continue;o.x+=o.vx;if(Math.abs(o.x-o.x0)>90)
 if(hit(p,o,o.w,o.h)){
 if(p.vy>0&&p.y+p.h-o.y<24){o.alive=false;killed++;p.vy=-8;add(-MT[o.t].v);SFX.stomp();toast('กำจัด'+MT[o.t].n+' <b class="g">−'+MT[o.t].v+' kg</b>');}
 else if(!p.inv){add(40);p.inv=90;SFX.hurt();if(navigator.vibrate)navigator.vibrate(80);p.vy=-6;p.x-=p.f*30;toast('โดนขวดพลาสติกชน <b class="b">+40 kg</b>');}}}
-for(const it of items){it.life--;if(Math.hypot(p.x+p.w/2-it.x,p.y+p.h/2-it.y)<30){it.life=0;add(it.it.d);it.it.d<0?SFX.good():SFX.bad();
+for(const it of items){it.life--;if(it.vx){it.x+=it.vx;if(it.x<cam-60)it.life=0;}if(Math.hypot(p.x+p.w/2-it.x,p.y+p.h/2-it.y)<30){it.life=0;add(it.it.d);it.it.d<0?SFX.good():SFX.bad();
 toast(it.it.e+' '+it.it.n+' <b class="'+(it.it.d<0?'g':'b')+'">'+(it.it.d>0?'+':'−')+Math.abs(it.it.d)+' kg</b><br><small>'+it.it.t+'</small>');}}
 items=items.filter(i=>i.life>0);
 if(p.x>=L-100){if(carbon<=GOAL)return end(true);if(!flagMsg){toast('ค่าคาร์บอนยังสูงเกิน '+GOAL+' kg กลับไปกำจัดขวดและเก็บพลังงานสะอาดเพิ่ม');flagMsg=200;}p.x=L-101;}
