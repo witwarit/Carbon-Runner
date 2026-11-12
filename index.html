@@ -10,7 +10,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:'Kanit',system-ui,sans-serif}
 body{display:flex;flex-direction:column;align-items:center;padding:10px}
-#wrap{width:100%;max-width:820px;position:relative}
+#wrap{width:min(100%,820px,calc((100dvh - 70px)*2));position:relative}
 #hud{display:flex;align-items:center;gap:12px;margin-bottom:8px;font-size:15px}
 #num{font-weight:600;min-width:150px}
 #bar{flex:1;height:14px;background:var(--line);border-radius:7px;position:relative;overflow:hidden}
@@ -31,18 +31,23 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 #pad div{display:flex;gap:10px}
 #pad button{min-width:92px;height:72px;font-size:30px;background:var(--card);color:var(--ink);border:2px solid var(--line);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}#pad button:active{background:var(--ok);color:#fff}#pad #bj{min-width:150px;font-size:22px}#pad div{gap:14px}
 html,body{touch-action:manipulation;overscroll-behavior:none}
+#joy{position:absolute;left:3%;bottom:7%;width:22%;max-width:150px;aspect-ratio:1;border-radius:50%;background:rgba(255,255,255,.22);border:3px solid rgba(255,255,255,.55);touch-action:none;user-select:none;-webkit-user-select:none}
+#knob{position:absolute;left:50%;top:50%;width:46%;height:46%;border-radius:50%;background:rgba(255,255,255,.7);border:3px solid rgba(0,0,0,.25);transform:translate(-50%,-50%)}
+#jb{position:absolute;right:3%;bottom:7%;width:20%;max-width:130px;aspect-ratio:1;border-radius:50%;background:rgba(232,67,59,.55);border:3px solid rgba(255,255,255,.7);color:#fff;font-weight:600;font-size:clamp(13px,3vw,20px);display:flex;align-items:center;justify-content:center;touch-action:none;user-select:none;-webkit-user-select:none}
+#jb.on{background:rgba(232,67,59,.92)}
+@media (max-height:480px){#wrap{width:min(100%,820px,calc((100dvh - 46px)*2))}body{padding:6px max(8px,env(safe-area-inset-right)) 6px max(8px,env(safe-area-inset-left))}#hud{margin-bottom:4px;font-size:12px;gap:8px}#num{min-width:105px}#bar{height:10px}#mute{padding:1px 8px;font-size:13px}#toast{font-size:12px;padding:4px 10px;top:6px}.ov{gap:4px;padding:8px}.ov h1{font-size:19px}.ov p{font-size:11.5px;line-height:1.35}.ov button{padding:6px 18px}#joy{width:min(24%,110px);left:2%;bottom:5%}#jb{width:min(21%,96px);right:2%;bottom:5%}}
 #mute{padding:4px 10px;background:var(--card);color:var(--ink);border:2px solid var(--line);font-size:16px}
 </style></head><body>
 <div id="wrap">
 <div id="hud"><span id="num">CO₂ 1000 kg</span><div id="bar"><div id="fill"></div><div id="goal"></div></div><span>เป้าหมาย ≤ 500</span><button id="mute" aria-label="เปิด/ปิดเสียง">🔊</button></div>
-<div id="stage"><canvas id="c" width="800" height="400"></canvas><div id="toast"></div>
+<div id="stage"><canvas id="c" width="800" height="400"></canvas><div id="toast"></div><div id="joy"><div id="knob"></div></div><div id="jb">กระโดด</div>
 <div class="ov" id="start"><h1>Carbon Runner: เมืองหมอกควัน</h1>
 <p>น้องนักเรียนเทพศิรินทร์ในเสื้อลายเหลือง-เขียว จะมาช่วยเมืองที่ปล่อยคาร์บอนสูงมาก! วิ่งไปทางขวาจนถึงธง แล้วทำให้ค่าคาร์บอนเหลือไม่เกิน 500 kg</p>
 <p>กระโดดเหยียบขวดพลาสติก: ลด 40 kg (ถ้าโดนชน: เพิ่ม 40 kg)<br>กระโดดชนกล่อง ? จะได้สิ่งก่อสร้างแบบสุ่ม ลองเก็บเฉพาะแบบที่ลดคาร์บอน ไอเทมจะลอยอยู่ 15 วินาที ถ้าไม่เก็บจะหายไป</p>
-<p>เล่นด้วยปุ่ม ← → และ Space หรือปุ่มบนจอ</p>
+<p>เล่นด้วยปุ่ม ← → และ Space หรือแตะจอยสติ๊กซ้าย / ปุ่มกระโดดขวาบนหน้าจอ</p>
 <button id="go">เริ่มเกม</button></div>
 <div class="ov hide" id="end"><h1 id="et"></h1><p id="ep"></p><button id="again">เล่นอีกครั้ง</button></div></div>
-<div id="pad"><div><button id="bl" aria-label="ซ้าย">◀</button><button id="br" aria-label="ขวา">▶</button></div><button id="bj" aria-label="กระโดด">กระโดด</button></div>
+
 </div>
 <script>
 const cv=document.getElementById('c'),x=cv.getContext('2d');
@@ -159,12 +164,16 @@ function loop(){if(state=='play')update();draw();hud();requestAnimationFrame(loo
 const K={ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',ArrowUp:'jump',w:'jump',' ':'jump'};
 addEventListener('keydown',e=>{const k=K[e.key];if(k){keys[k]=1;e.preventDefault();}});
 addEventListener('keyup',e=>{const k=K[e.key];if(k)keys[k]=0;});
-[['bl','left'],['br','right'],['bj','jump']].forEach(([id,k])=>{const b=$(id);
-b.addEventListener('pointerdown',e=>{e.preventDefault();keys[k]=1;});
-['pointerup','pointerleave','pointercancel'].forEach(ev=>b.addEventListener(ev,()=>keys[k]=0));});
+const joy=$('joy'),knob=$('knob'),jb=$('jb');let jid=null;
+function jmove(e){const r=joy.getBoundingClientRect(),dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2),m=r.width/2,d=Math.hypot(dx,dy)||1,k=Math.min(d,m)/d;knob.style.transform='translate(-50%,-50%) translate('+dx*k+'px,'+dy*k+'px)';keys.left=dx<-m*.25?1:0;keys.right=dx>m*.25?1:0;}
+joy.addEventListener('pointerdown',e=>{e.preventDefault();jid=e.pointerId;joy.setPointerCapture(jid);jmove(e);});
+joy.addEventListener('pointermove',e=>{if(e.pointerId===jid)jmove(e);});
+['pointerup','pointercancel'].forEach(v=>joy.addEventListener(v,e=>{if(e.pointerId!==jid)return;jid=null;keys.left=keys.right=0;knob.style.transform='translate(-50%,-50%)';}));
+jb.addEventListener('pointerdown',e=>{e.preventDefault();jb.setPointerCapture(e.pointerId);keys.jump=1;jb.classList.add('on');});
+['pointerup','pointercancel'].forEach(v=>jb.addEventListener(v,()=>{keys.jump=0;jb.classList.remove('on');}));
 $('go').onclick=()=>{$('start').classList.add('hide');started=true;ac();};
 $('mute').onclick=()=>{muted=!muted;$('mute').textContent=muted?'🔇':'🔊';};
-$('pad').addEventListener('contextmenu',e=>e.preventDefault());
+$('stage').addEventListener('contextmenu',e=>e.preventDefault());
 addEventListener('blur',()=>{keys.left=keys.right=keys.jump=0;});
 $('again').onclick=()=>{$('end').classList.add('hide');reset();};
 reset();loop();
